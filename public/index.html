@@ -878,6 +878,10 @@ $('btn-leave-game').addEventListener('click', () => {
 // ──────────────────────────────────────────────────────
 //  Socket events
 // ──────────────────────────────────────────────────────
+socket.on('room:symbol:update', ({ symbol }) => {
+  mySymbol = symbol;
+});
+
 socket.on('room:created', ({ roomId, symbol }) => {
   mySymbol = symbol;
   myRoomId = roomId;

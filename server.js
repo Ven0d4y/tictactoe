@@ -143,18 +143,24 @@ io.on("connection", (socket) => {
     if (room.players.length >= 2) return socket.emit("error", "Room is full");
     if (room.status === "finished") return socket.emit("error", "Game already ended");
 
-    const player = { id: socket.id, nickname: nickname.trim(), symbol: "O" };
+    // Randomly assign symbols each game
+    const symbols = Math.random() < 0.5 ? ["X", "O"] : ["O", "X"];
+    room.players[0].symbol = symbols[0];
+    const player = { id: socket.id, nickname: nickname.trim(), symbol: symbols[1] };
     room.players.push(player);
     room.scores[socket.id] = { wins: 0, losses: 0, draws: 0 };
     room.status = "playing";
     socket.join(roomId.toUpperCase());
     socket.data.roomId = roomId.toUpperCase();
     socket.data.nickname = nickname.trim();
-    socket.emit("room:joined", { roomId: roomId.toUpperCase(), symbol: "O" });
+    // Notify each player of their assigned symbol
+    const p0 = room.players[0];
+    io.to(p0.id).emit("room:symbol:update", { symbol: p0.symbol });
+    socket.emit("room:joined", { roomId: roomId.toUpperCase(), symbol: player.symbol });
     io.to(roomId.toUpperCase()).emit("game:start", { players: room.players });
     broadcastRoom(roomId.toUpperCase());
     startTimer(roomId.toUpperCase());
-    console.log(`${nickname} joined room ${roomId}`);
+    console.log(`${nickname} joined room ${roomId} — symbols: ${p0.nickname}=${p0.symbol}, ${nickname}=${player.symbol}`);
   });
 
   // Make a move
@@ -187,12 +193,21 @@ io.on("connection", (socket) => {
     io.to(roomId).emit("rematch:vote", { votes: [...room.rematchVotes], total: room.players.length });
 
     if (room.rematchVotes.size === room.players.length) {
-      // Both agreed — reset board
+      // Both agreed — reset board and randomize symbols again
       room.board = Array(9).fill(null);
       room.currentTurn = "X";
       room.winner = null;
       room.status = "playing";
       room.rematchVotes = new Set();
+      // Randomly swap symbols
+      const flip = Math.random() < 0.5;
+      if (flip) {
+        room.players[0].symbol = room.players[0].symbol === "X" ? "O" : "X";
+        room.players[1].symbol = room.players[1].symbol === "X" ? "O" : "X";
+      }
+      for (const p of room.players) {
+        io.to(p.id).emit("room:symbol:update", { symbol: p.symbol });
+      }
       io.to(roomId).emit("game:rematch:start", { players: room.players });
       broadcastRoom(roomId);
       startTimer(roomId);
